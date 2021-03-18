@@ -1,0 +1,386 @@
+<?php 
+	require_once'dbManager.php';
+
+class querys {
+	
+	private $dbm;
+
+	function __construct()
+	{
+		$this->dbm = new dbManager();
+	
+	}
+
+	function cerrarConexion()
+	{
+		$this->dbm->desconectar();
+	}
+	
+	/* Funcion que devuelve un array con la cantidad de unidades y valor total de un intervalo de fechas*/
+	
+	function GetDepartamentos () {
+		$query = "SELECT * FROM VentasLocales..tDepartamento";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getNombreProveedor($codigo) {
+		$nombre = "Error en codigo proveedor";
+		$query = "SELECT Nombre FROM tProveedor WHERE IDProveedor = '$codigo' UNION ALL SELECT Nombre FROM prod2kbk..tProveedor WHERE IDProveedor = '$codigo'";
+		$Result = $this->dbm->realizarConsulta ($query);
+		while ($row = sqlsrv_fetch_array($Result)){
+			$nombre = $row["Nombre"];
+		}
+		return $nombre;
+	}
+	
+	function getJSONListadoRevision ($MateriaPrima) {
+		$query = "select idCalidadDefectoDetalle, Defecto, CantidadTolerada, CantidadTolerada2, CantidadTolerada3  from tCalidadDefecto T3 inner join tCalidadDefectoDetalle T4 on T3.idCalidadDefecto=T4.idCalidadDefecto WHERE visible = 1 and GrupoCalidadRevisión = '$MateriaPrima'";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getDatosBoleta1 ($Serie, $Numero) {
+		$query = "SELECT convert(nvarchar,a.Fecha, 106) as Fecha, a.IDProveedor,  b.Nombre, sum(c.PesoBruto) AS Peso, 
+d.TipoMateriaPrima FROM tPallet a 
+LEFT OUTER JOIN tProveedor b ON a.IDProveedor = b.IDProveedor 
+INNER JOIN tPalletDetalle c on a.IDPallet = c.IDPallet 
+INNER JOIN tProducto d on a.Producto = d.Producto 
+WHERE BoletaSerie = '$Serie' AND BoletaNúmero = $Numero 
+GROUP BY convert(nvarchar,a.Fecha, 106) , a.IDProveedor,  b.Nombre, d.TipoMateriaPrima 
+HAVING SUM(c.PesoBruto) > 0
+UNION ALL 
+SELECT convert(nvarchar,a.Fecha, 106) as Fecha, a.IDProveedor,  b.Nombre, SUM (c.PesoBruto) AS Peso, d.TipoMateriaPrima 
+FROM Prod2kBK..tPallet a 
+LEFT OUTER JOIN Prod2kBK..tProveedor b ON a.IDProveedor = b.IDProveedor 
+INNER JOIN Prod2kBK..tPalletDetalle c on a.IDPallet = c.IDPallet 
+INNER JOIN tProducto d on a.Producto = d.Producto 
+WHERE BoletaSerie = '$Serie' AND BoletaNúmero = $Numero 
+GROUP BY convert(nvarchar,a.Fecha, 106) , a.IDProveedor, b.Nombre, d.TipoMateriaPrima
+HAVING  sum(c.PesoBruto) > 0 ";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	
+	function getValorMuestraRequerido ($peso){
+		$query = "SELECT Libras FROM tCalidadDefectoTamanoMuestra WHERE inferior < $peso AND superior >= $peso";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getBoletasPMP (){
+		$query = "SELECT Pa.BoletaSerie + '-' + Cast(Pa.BoletaNúmero as nvarchar) AS Boleta, Pro.Nombre AS Productor, Pa.Producto    
+		FROM tPallet Pa INNER JOIN tProveedor Pro ON Pa.IDProveedor = Pro.IDProveedor where 
+		IDPallet not in (SELECT b.IDPallet FROM tCalidadAutorizaciónMPDetalle a 
+		INNER JOIN tPallet b ON a.BoletaSerie = b.BoletaSerie AND a.BoletaNúmero = b.BoletaNúmero) and Fecha > GETDATE()-25 ORDER BY Pa.Fecha DESC";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getExisteMaestraRevision($tipoMP){
+		$query = "select COUNT(*) AS Total from tCalidadDefecto T3 inner join tCalidadDefectoDetalle T4 on T3.idCalidadDefecto=T4.idCalidadDefecto WHERE visible = 1 and GrupoCalidadRevisión = '$tipoMP'";
+		$Result = $this->dbm->realizarConsulta ($query);
+		$row = sqlsrv_fetch_array($Result);
+		return $row["Total"];
+	}
+	
+	function getCamiones(){
+		$query = "SELECT Camión as Camion FROM tCamiones WHERE Activo = 1 ORDER BY Camión ASC";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getPersonas(){
+		$query = "SELECT idpersona AS Codigo, LOWER (Nombre +  ' ' + Apellido)  AS Nombre, Tipo = CASE WHEN (EsPiloto = 1) THEN '1' WHEN (EsCtrlCalidad = 1) THEN '2' END  FROM tpersona WHERE Activo = 1 AND (EsPiloto = 1 OR EsCtrlCalidad = 1) ORDER BY Nombre ASC";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function NuevaCabecera ($CodEmp, $Nombre, $Camion, $Piloto, $EstCam, $EstCan, $prueba = 0) {
+		$Base = "Prod2k";
+		if ($prueba == 1) { $Base = "Prod2kPrueba"; }
+		$query = "INSERT INTO $Base..tCalidadAutorizaciónMP VALUES (GETDATE(), '$CodEmp', '$Nombre', 1, '$Camion', '$Piloto', '$EstCam', '$EstCan'); SELECT SCOPE_IDENTITY()";
+		$resource = $this->dbm->realizarConsulta($query);
+		sqlsrv_next_result($resource); 
+		sqlsrv_fetch($resource); 
+		return sqlsrv_get_field($resource, 0); 
+	}
+	
+	function CrearCAMPD ($idCalidadAMP, $BoletaS, $BoletaN, $PesoM, $PesoR, $Observaciones, $prueba = 0, $dispo = "No Definido") {
+		$Porcentaje = $PesoR / $PesoM;
+		$Base = "Prod2k";
+		if ($prueba == 1) { $Base = "Prod2kPrueba"; }
+		$query = "INSERT INTO $Base..tCalidadAutorizaciónMPDetalle (idCalidadAutorizaciónMP, BoletaSerie, BoletaNúmero, Producto, IDProveedor, PesoMuestra, PesoRechazo, PorcentajedeRechazo, Observaciones, Revisado, idDispositivo) VALUES ($idCalidadAMP,'$BoletaS',$BoletaN,(SELECT Producto FROM prod2k..tPallet WHERE BoletaNúmero = $BoletaN AND BoletaSerie = '$BoletaS'), (SELECT IDProveedor FROM prod2k..tPallet WHERE BoletaNúmero = $BoletaN AND BoletaSerie = '$BoletaS'), $PesoM,$PesoR,$Porcentaje,'$Observaciones',1, '$dispo'); SELECT SCOPE_IDENTITY()";
+		$resource = $this->dbm->realizarConsulta($query);
+		sqlsrv_next_result($resource); 
+		sqlsrv_fetch($resource); 
+		return sqlsrv_get_field($resource, 0); 
+	}
+	
+	
+	
+	function CrearCabRR ($BoletaSerie, $BoletaNumero, $Linea, $Pallet, $PesoMuestra, $PesoRechazo, $Observaciones, $prueba = 0, $dispo = "No Definido") {
+		//$Porcentaje = $PesoR / $PesoM;
+		$Base = "Prod2kbk";
+		if ($prueba == 1) { $Base = "Prod2kbkPrueba"; }
+		$query = "INSERT INTO $Base..tRevisionRechazo (BoletaSerie, BoletaNumero, Linea, Pallet, PesoMuestra, PesoRechazo, Observaciones, Device)
+VALUES ('$BoletaSerie', $BoletaNumero, '$Linea', '$Pallet', $PesoMuestra, $PesoRechazo, '$Observaciones', '$dispo'); SELECT SCOPE_IDENTITY()";
+//echo $query;
+		$resource = $this->dbm->realizarConsulta($query);
+		sqlsrv_next_result($resource); 
+		sqlsrv_fetch($resource); 
+		return sqlsrv_get_field($resource, 0); 
+	}
+	
+	function crearDRMPD ($idAutDetalle, $Defecto, $CantidadTolerada, $peso, $prueba = 0) {
+		$Base = "Prod2k";
+		if ($prueba == 1) { $Base = "Prod2kPrueba"; }
+		$query = "INSERT INTO $Base..tCalidadAutorizaciónMPDetalleRevision (idCalidadAutorizaciónMPDetalle, Defecto, CantidadTolerada, ResultadoDefecto, EscalaDaño, peso) VALUES ($idAutDetalle, '$Defecto', $CantidadTolerada, 0, 0, $peso); SELECT SCOPE_IDENTITY()";
+		$resource = $this->dbm->realizarConsulta($query);
+		sqlsrv_next_result($resource); 
+		sqlsrv_fetch($resource); 
+		$Creado = sqlsrv_get_field($resource, 0);
+		if (is_numeric($Creado)) {
+			return $Creado; 
+		} else {
+			return "**$CantidadTolerada**$query";
+		}
+		
+	}
+	
+	function crearDetRR ($idCab, $Defecto, $peso, $prueba = 0) {
+		$Base = "Prod2kbk";
+		if ($prueba == 1) { $Base = "Prod2kbkPrueba"; }
+		$query = "INSERT INTO $Base..tRevisionRechazoDetalle (idRevisionRechazo, Defecto, Peso) VALUES ($idCab, '$Defecto', $peso); SELECT SCOPE_IDENTITY()";
+		$resource = $this->dbm->realizarConsulta($query);
+		sqlsrv_next_result($resource); 
+		sqlsrv_fetch($resource); 
+		$Creado = sqlsrv_get_field($resource, 0);
+		if (is_numeric($Creado)) {
+			return $Creado; 
+		} else {
+			return "**$CantidadTolerada**$query";
+		}
+		
+	}
+	
+	function crearFoto ($id, $src, $prueba = 0) {
+		$Base = "Prod2k";
+		if ($prueba == 1) { $Base = "Prod2kPrueba"; }
+		$query = "INSERT INTO $Base..tCalidadAutorizaciónMPFotografia (idCalidadAutorizaciónMPDetalleRevision, srcFotografia, NoFoto) VALUES ($id, '$src', (SELECT COUNT(*) + 1 FROM $Base..tCalidadAutorizaciónMPFotografia WHERE idCalidadAutorizaciónMPDetalleRevision = $id))";
+		$Result = $this->dbm->ejecutarInstruccion($query);
+		return $Result;
+	}
+	
+	function crearFotoRR ($id, $nombre, $path, $prueba = 0) {
+		$Base = "Prod2kbk";
+		if ($prueba == 1) { $Base = "Prod2kPrueba"; }
+		$query = "INSERT INTO $Base..tRevisionRechazoFoto (idRevisionRechazoDetalle, URLPrefijo, NombreFoto) VALUES ( $id, '$path', '$nombre')";
+		$Result = $this->dbm->ejecutarInstruccion($query);
+		return $Result;
+	}
+	
+	function VersionNueva ($Version) {
+		$query = "SELECT TOP 1 VersionActual FROM Control..tAplicacionesVersion WHERE CodigoAplicacion = 'CCA2016' ORDER BY fechaHora DESC";
+		$Result = $this->dbm->realizarConsulta ($query);
+		$row = sqlsrv_fetch_array($Result);
+		$versionN =  $row["VersionActual"];
+		
+		if ($Version < $versionN) {
+			return "1";
+		} else {
+			return "0";
+		}
+		
+	}
+	
+	function getBoletasRevisiones($Boleta) {
+		$query = "SELECT TOP 35 BoletaSerie + '-' + convert(nvarchar, BoletaNúmero) AS Boleta, Producto, IDProveedor, round(PorcentajedeRechazo * 100, 2) as PorcentajedeRechazo, idCalidadAutorizaciónMPDetalle as id FROM tCalidadAutorizaciónMPDetalle ";
+		
+		if (strcasecmp($Boleta, "") <> 0) {
+			$Boleta = str_replace("-", "", $Boleta);
+			$query .= " WHERE BoletaSerie + convert(nvarchar, BoletaNúmero) like '%$Boleta%' ";
+		}
+		 
+		$query .= "ORDER BY idCalidadAutorizaciónMPDetalle DESC";
+		
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+		
+	}
+	
+	function getBoletasRevision ($fechaI, $fechaF, $tipoBoleta, $tipoProductor, $finca, $boleta) {
+		$boleta = str_replace("-", "", $boleta);
+		$BQ = "";
+		if (strcasecmp($boleta, "") <> 0) {
+			$BQ = "AND (t1.BoletaSerie + convert(nvarchar, t1.BoletaNúmero) like '%$boleta%')";
+		}
+		$query = "SELECT TOP 100 Convert(nvarchar,t1.FechaHora,103) as Fecha, BoletaSerie + '-' + convert(nvarchar, t1.BoletaNúmero) AS Boleta, t1.Producto, t1.IDProveedor, t2.Nombre, 				round(t1.PorcentajedeRechazo * 100, 2) as PorcentajedeRechazo, t1.idCalidadAutorizaciónMPDetalle as id FROM tCalidadAutorizaciónMPDetalle t1 INNER JOIN tProveedor t2 ON t2.IDProveedor = t1.IDProveedor
+
+		WHERE ((t1.FechaHora between '$fechaI 00:00' AND '$fechaF 23:59') AND (t1.BoletaSerie like '$tipoBoleta%' ) AND t2.Nombre like '$tipoProductor%' AND t1.IDProveedor like '$finca%') 
+		$BQ
+		
+		ORDER BY idCalidadAutorizaciónMPDetalle DESC";
+		//echo "$query";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function verProveedorFinca() {
+		$query = "SELECT IDProveedor, Nombre FROM tProveedor WHERE Nombre like 'Finca%' AND idproveedor in (SELECT IDProveedor FROM tCalidadAutorizaciónMPDetalle WHERE FechaHora > GETDATE() - 365)";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getDetalleMP ($idRevisionMP) {
+		
+		$query = "SELECT t1.idCalidadAutorizaciónMPDetalleRevision as id, t1.Defecto, t1.peso, t1.CantidadTolerada * t2.PesoMuestra AS PesoTolerado, (SELECT COUNT(*) FROM tCalidadAutorizaciónMPFotografia WHERE idCalidadAutorizaciónMPDetalleRevision = t1.idCalidadAutorizaciónMPDetalleRevision) as Fotos FROM tCalidadAutorizaciónMPDetalleRevision t1 INNER JOIN tCalidadAutorizaciónMPDetalle t2 ON t1.idCalidadAutorizaciónMPDetalle = t2.idCalidadAutorizaciónMPDetalle WHERE t1.idCalidadAutorizaciónMPDetalle = $idRevisionMP ORDER BY t1.idCalidadAutorizaciónMPDetalleRevision ASC";
+		//echo $query;
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getDetalleMPP ($idRevisionMP) {
+		
+		$query = "SELECT DISTINCT t1.idCalidadAutorizaciónMPDetalleRevision as id, t1.Defecto, Round((t1.peso / t2.PesoMuestra) * 100,2) as Porcentaje, Tolerado = Round(( isnull(t5.CantidadTolerada, t1.CantidadTolerada))*100,2) , t1.CantidadTolerada * t2.PesoMuestra AS PesoTolerado, 
+(SELECT COUNT(*) FROM tCalidadAutorizaciónMPFotografia WHERE idCalidadAutorizaciónMPDetalleRevision = t1.idCalidadAutorizaciónMPDetalleRevision) as Fotos 
+
+FROM tCalidadAutorizaciónMPDetalleRevision t1 
+INNER JOIN tCalidadAutorizaciónMPDetalle t2 ON t1.idCalidadAutorizaciónMPDetalle = t2.idCalidadAutorizaciónMPDetalle 
+LEFT OUTER JOIN tProducto t3 ON t3.Producto = t2.Producto
+LEFT OUTER JOIN tCalidadDefecto t4 ON t3.GrupoRevisiónCalidad = t4.GrupoCalidadRevisión
+LEFT OUTER JOIN tCalidadDefectoDetalle t5 on t4.idCalidadDefecto = t5.idCalidadDefecto AND t1.Defecto = t5.Defecto
+WHERE t1.idCalidadAutorizaciónMPDetalle = $idRevisionMP ORDER BY t1.idCalidadAutorizaciónMPDetalleRevision ASC";
+		echo $query;
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getImages ($idRevi) {
+		$query = "SELECT * FROM tCalidadAutorizaciónMPFotografia WHERE idCalidadAutorizaciónMPDetalleRevision = $idRevi";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getCabeceraMP ($id) {
+		$query = "SELECT convert(nvarchar,t2.FechaHora, 100) as FechaHora, t1.idpersona, t1.Empleado, t1.Camión as Camion, t4.Nombre + ' ' + t4.Apellido as Piloto, t1.EstadoCamión as EstCamion, t1.EstadoCAnasta,  t2.BoletaSerie, t2.BoletaNúmero as BoletaNumero, t2.Producto, t5.IDProveedor, t5.Nombre, round(t2.PesoMuestra,2) as PesoMuestra, Round(t2.PesoRechazo,3) as PesoRechazo, Round(t2.PorcentajedeRechazo * 100,2) as PorcentajedeRechazo, t2.Observaciones FROM tCalidadAutorizaciónMP t1 LEFT OUTER JOIN tCalidadAutorizaciónMPDetalle t2 ON t1.idCalidadAutorizaciónMP = t2.idCalidadAutorizaciónMP LEFT OUTER JOIN tpersona t4 ON t1.IDPiloto = t4.idpersona LEFT OUTER JOIN tProveedor t5 ON t5.IDProveedor = t2.IDProveedor WHERE t2.idCalidadAutorizaciónMPDetalle = $id";
+		//echo $query;
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getIDB ($Boleta){
+		$query = "SELECT idCalidadAutorizaciónMPDetalle as id FROM tCalidadAutorizaciónMPDetalle WHERE BoletaSerie + '-' + CAST(BoletaNúmero as varchar) = '$Boleta'";
+		$Result = $this->dbm->realizarConsulta ($query);
+		$row = sqlsrv_fetch_array($Result);
+		return $row["id"];
+	}
+	
+	//Quitar la "Prueba"
+	function getTicketRR($pallet){
+		$query = "SELECT TOP 1 
+t1.id, t1.BoletaSerie, t1.BoletaNúmero as BoletaNumero, t1.Linea, t2.Producto, t4.TipoMateriaPrima, t3.PesoBruto - (t3.Cantidad * t3.TaraCanasta) - t3.TaraPallet as PesoNeto 
+FROM Prod2kBK..tPalletLinea t1
+INNER JOIN Prod2kBK..tPallet t2 ON t1.BoletaSerie = t2.BoletaSerie AND t1.BoletaNúmero = t2.BoletaNúmero
+INNER JOIN Prod2kBK..tPalletDetalle t3 ON t2.IDPallet = t3.IDPallet AND t1.CódigoPallet = t3.CódigoPallet
+INNER JOIN Prod2k..tProducto t4 ON t2.Producto = t4.Producto
+WHERE t1.CódigoPallet = '$pallet' ORDER BY t1.FechaHoraAsignacion DESC";
+$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+
+	
+	function verFincas (){
+		$query = "SELECT idFinca, descripcion FROM Fincas..tFinca WHERE vigente = 1";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+
+	function verMaquilas (){
+		$query = "SELECT * FROM Prod2kBK..tCentro";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	function verBoletasMaquila ($FechaI, $FechaF, $idCentro, $idFinca, $Etapa, $tipoProveedor, $boleta){
+		$query = "SELECT CONVERT(varchar, t1.Fecha, 103) as Fecha, t1.idpallet, isnull(
+(SELECT descripcion FROM Fincas..tFinca WHERE idFinca = (SELECT idFinca FROM Fincas..tEtapa WHERE CodigoEtapa = t1.EtapaFinca and CodigoEtapa is not null)), 'S/N') as Finca,
+ isnull(t1.EtapaFinca, 'S/N') as Etapa, t1.IDProveedor, (SELECT Nombre FROM prod2kbk..tProveedor WHERE IDProveedor = t1.IDProveedor) as Proveedor,  isnull((select TipoMateriaPrima FROM Prod2k..tProducto WHERE Producto = t1.Producto), t1.Producto) as Producto, t1.BoletaSerie, t1.BoletaNúmero as BoletaNumero, t1.PesoNeto, MAX(t4.FechaPesaje) as UltimaFechaProceso
+, isnull((SELECT SUM(PesoBruto  - (Cantidad * TaraCanasta) - TaraPallet) FROM prod2kbk..tPalletDetalle WHERE IDPallet = t1.IDPallet and idpallet in (
+SELECT idpallet FROM prod2kbk..tPalletLinea WHERE CódigoPallet = prod2kbk..tPalletDetalle.CódigoPallet and Estado = 'D')), isnull(SUM(CAST(t4.Cantidad as int) - 3), 0)) as PesoProcesado, 
+isnull(SUM(CAST(t4.Cantidad as int) - 3),0) as Maquilado,
+isnull(Round((1 - ( SUM(CAST(t4.Cantidad as int) - 3)/ (SELECT SUM(PesoBruto  - (Cantidad * TaraCanasta) - TaraPallet) FROM prod2kbk..tPalletDetalle WHERE IDPallet = t1.IDPallet and idpallet in (
+SELECT idpallet FROM prod2kbk..tPalletLinea WHERE CódigoPallet = prod2kbk..tPalletDetalle.CódigoPallet and Estado = 'D'))) ) * 100,2),0) as PorcRechazo 
+, (SELECT Centro FROM prod2kbk..tCentro WHERE idCentro = t1.idCentro) as Maquila FROM prod2kbk..tPallet t1
+LEFT OUTER JOIN Prod2k..tTrabajoValorReportado t4 ON t1.IDPallet = t4.idpallet
+
+WHERE t1.Fecha  between '$FechaI' and '$FechaF' and CAST(t1.idCentro as varchar) like '%$idCentro%' and 
+isnull((SELECT idFinca FROM Fincas..tEtapa WHERE CodigoEtapa = t1.EtapaFinca and CodigoEtapa is not null), '%') like '%$idFinca%' AND
+isnull(t1.EtapaFinca, '') like '%$Etapa%' AND (SELECT Nombre FROM prod2kbk..tProveedor WHERE IDProveedor = t1.IDProveedor) like '%$tipoProveedor%' AND
+t1.BoletaSerie + CAST(t1.BoletaNúmero as varchar) like '%$boleta%' and t1.IDProveedor not like 'RS%' and t1.IDProveedor not like 'R4%'
+GROUP BY t1.idpallet, t1.EtapaFinca, t1.IDProveedor, t1.Producto, t1.BoletaSerie, t1.BoletaNúmero, t1.PesoNeto, t1.idCentro, t1.Fecha";
+	//echo $query;
+	$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function verBoletaMaquila ($boleta){
+		$query = "SELECT CONVERT(varchar, t1.Fecha, 103) as Fecha, t1.idpallet, isnull(
+(SELECT descripcion FROM Fincas..tFinca WHERE idFinca = (SELECT idFinca FROM Fincas..tEtapa WHERE CodigoEtapa = t1.EtapaFinca and CodigoEtapa is not null)), 'S/N') as Finca,
+ isnull(t1.EtapaFinca, 'S/N') as Etapa, t1.IDProveedor, (SELECT Nombre FROM prod2kbk..tProveedor WHERE IDProveedor = t1.IDProveedor) as Proveedor,  isnull((select TipoMateriaPrima FROM Prod2k..tProducto WHERE Producto = t1.Producto), t1.Producto) as Producto, t1.BoletaSerie, t1.BoletaNúmero as BoletaNumero, t1.PesoNeto, CONVERT(varchar, MAX(t4.FechaPesaje),120) as UltimaFechaProceso
+, isnull((SELECT SUM(PesoBruto  - (Cantidad * TaraCanasta) - TaraPallet) FROM prod2kbk..tPalletDetalle WHERE IDPallet = t1.IDPallet and idpallet in (
+SELECT idpallet FROM prod2kbk..tPalletLinea WHERE CódigoPallet = prod2kbk..tPalletDetalle.CódigoPallet and Estado = 'D')), isnull(SUM(CAST(t4.Cantidad as int) - 3), 0)) as PesoProcesado, 
+isnull(SUM(CAST(t4.Cantidad as int) - 3),0) as Maquilado,
+isnull(Round((1 - ( SUM(CAST(t4.Cantidad as int) - 3)/ (SELECT SUM(PesoBruto  - (Cantidad * TaraCanasta) - TaraPallet) FROM prod2kbk..tPalletDetalle WHERE IDPallet = t1.IDPallet and idpallet in (
+SELECT idpallet FROM prod2kbk..tPalletLinea WHERE CódigoPallet = prod2kbk..tPalletDetalle.CódigoPallet and Estado = 'D'))) ) * 100,2),0) as PorcRechazo 
+, (SELECT Centro FROM prod2kbk..tCentro WHERE idCentro = t1.idCentro) as Maquila ,
+
+isnull((SELECT SUM(x2.peso) FROM prod2kbk..tRevisionRechazo x1 
+inner join prod2kbk..tRevisionRechazoDetalle x2 on x1.idRevisionRechazo = x2.idRevisionRechazo WHERE  x1.BoletaNumero = t1.BoletaNúmero AND x1.BoletaSerie = t1.BoletaSerie),0) as MuestraCalidad
+
+FROM prod2kbk..tPallet t1
+LEFT OUTER JOIN Prod2k..tTrabajoValorReportado t4 ON t1.IDPallet = t4.idpallet
+
+WHERE t1.BoletaSerie + CAST(t1.BoletaNúmero as varchar) = '$boleta'
+GROUP BY t1.idpallet, t1.EtapaFinca, t1.IDProveedor, t1.Producto, t1.BoletaSerie, t1.BoletaNúmero, t1.PesoNeto, t1.idCentro, t1.Fecha";
+	//echo $query;
+	$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getDetalleRevisionCalidad($idB) {
+		$query = "SELECT t1.BoletaSerie + CAST (t1.BoletaNumero as varchar) as Boleta, 
+t2.Defecto, (SELECT round(SUM(peso),2) FROM prod2kbk..tRevisionRechazoDetalle WHERE idRevisionRechazo in (SELECT idRevisionRechazo FROM prod2kbk..tRevisionRechazo WHERE BoletaNumero = t1.BoletaNumero
+AND BoletaSerie = t1.BoletaSerie and Defecto = t2.Defecto)) as Peso, 
+isnull((SELECT CantidadTolerada FROM tCalidadDefecto tt1 inner join tCalidadDefectoDetalle tt2 on tt1.idCalidadDefecto = tt2.idCalidadDefecto
+WHERE tt1.GrupoCalidadRevisión = (SELECT TipoMateriaPrima FROM tProducto WHERE Producto = 
+(SELECT Producto FROM Prod2kBK..tPallet WHERE BoletaSerie = t1.BoletaSerie AND BoletaNúmero = t1.BoletaNumero) AND Defecto = t2.Defecto)) * 100,0) as Tolerado, 
+COUNT(t3.NombreFoto) as Fotos
+FROM prod2kbk..tRevisionRechazo t1 INNER JOIN prod2kbk..tRevisionRechazoDetalle t2 on t1.idRevisionRechazo = t2.idRevisionRechazo
+LEFT OUTER JOIN prod2kbk..tRevisionRechazoFoto t3 on t2.idRevisionRechazoDetalle = t3.idRevisionRechazoDetalle
+WHERE BoletaSerie + CAST(BoletaNumero as varchar) = '$idB' 
+GROUP BY  t1.BoletaSerie, t1.BoletaNumero, t2.Defecto";
+		$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function getImagesRR ($Def, $Boleta) {
+		$query = "SELECT t3.URLPrefijo + t3.NombreFoto as srcFotografia FROM Prod2kBK..tRevisionRechazo t1 INNER JOIN Prod2kBK..tRevisionRechazoDetalle t2 on t1.idRevisionRechazo = t2.idRevisionRechazo
+INNER JOIN Prod2kBK..tRevisionRechazoFoto t3 on t2.idRevisionRechazoDetalle = t3.idRevisionRechazoDetalle WHERE t1.BoletaSerie + CAST(t1.BoletaNumero as varchar) = '$Boleta'
+AND t2.Defecto like '%$Def%'";
+	$Result = $this->dbm->realizarConsulta ($query);
+		return $Result;
+	}
+	
+	function NoExiste ($BoletaS, $BoletaN) {
+		$query = "SELECT * FROM Prod2k..tCalidadAutorizaciónMPDetalle WHERE BoletaSerie = '$BoletaS' AND BoletaNúmero = $BoletaN";
+		$result = $this->dbm->realizarConsulta ($query);
+		$res = true;
+		while ($row = sqlsrv_fetch_array($result)){
+			$res = false;
+		}
+		return $res;
+	}
+}
+
+?>

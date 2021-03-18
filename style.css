@@ -1,0 +1,10 @@
+ .imgMini { max-width: 99%; height: auto; vertical-align: center; }
+ .mini{ float: left; width: 100px; padding: 7px; margin:5px; border-radius: 7px 7px 7px 7px;
+-moz-border-radius: 7px 7px 7px 7px;
+-webkit-border-radius: 7px 7px 7px 7px;
+border: 3px double #878387;}
+ #imgGrande {max-width: 90%; max-height: 100%; border-radius: 7px 7px 7px 7px;
+-moz-border-radius: 7px 7px 7px 7px;
+-webkit-border-radius: 7px 7px 7px 7px;
+border: 3px double #878387;}
+ #grande {text-align: center;}
