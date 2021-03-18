@@ -56,7 +56,7 @@ else
 				<h3 style="text-align:center">Nueva Tarea</h3>
 			</div>
 			
-			<form class="form-horizontal" action="guardarT.php"  method="get"  autocomplete="off">
+			<form class="form-horizontal" action="guardarTask.php"  method="get"  autocomplete="off">
 				<div class="form-group">
 					<label for="nombre" class="col-sm-2 control-label">Nombre</label>
 					<div class="col-sm-10">
@@ -72,7 +72,7 @@ else
 				</div>
 				
 				<div class="form-group">
-					<label for="Pass" class="col-sm-2 control-label">Usuario</label>
+					<label for="user" class="col-sm-2 control-label">Usuario</label>
 					<div class="col-sm-10">
 						<input maxlength="10" type="text" class="form-control" id="user" name="user" value="<?php echo $_SESSION['Usuario']; ?>">
 					</div>

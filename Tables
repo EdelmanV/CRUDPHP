@@ -1,0 +1,81 @@
+/****** Object:  Table [dbo].[tTasks]    Script Date: 18/03/2021 10:19:59 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+SET ANSI_PADDING ON
+GO
+
+CREATE TABLE [dbo].[tTasks](
+	[IdTask] [int] IDENTITY(1,1) NOT NULL,
+	[Nombre] [varchar](50) NULL,
+	[Descripcion] [varchar](250) NULL,
+	[Estado] [int] NULL CONSTRAINT [DF_tTasks_Estado]  DEFAULT ((1)),
+	[IdUser] [int] NULL,
+	[Fecha] [datetime] NULL CONSTRAINT [DF_tTasks_Fecha]  DEFAULT (getdate()),
+ CONSTRAINT [PK_tTasks] PRIMARY KEY CLUSTERED 
+(
+	[IdTask] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING OFF
+GO
+
+
+/****** Object:  Table [dbo].[tUser]    Script Date: 18/03/2021 10:21:28 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+SET ANSI_PADDING ON
+GO
+
+CREATE TABLE [dbo].[tUser](
+	[IdUser] [int] IDENTITY(1,1) NOT NULL,
+	[Nombre] [varchar](50) NULL,
+	[Correo] [varchar](50) NULL,
+	[Pass] [varchar](10) NULL,
+ CONSTRAINT [PK_tUser] PRIMARY KEY CLUSTERED 
+(
+	[IdUser] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING OFF
+GO
+
+
+/****** Object:  Table [dbo].[tEstado]    Script Date: 18/03/2021 10:21:56 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+SET ANSI_PADDING ON
+GO
+
+CREATE TABLE [dbo].[tEstado](
+	[tIdEstado] [int] IDENTITY(1,1) NOT NULL,
+	[Estado] [varchar](20) NULL,
+ CONSTRAINT [PK_tEstado] PRIMARY KEY CLUSTERED 
+(
+	[tIdEstado] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+GO
+
+SET ANSI_PADDING OFF
+GO
+
+

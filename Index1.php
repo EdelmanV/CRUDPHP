@@ -255,7 +255,7 @@ else
 						
 				<div class="col-md-6">
 					<label>Nombre:</label>
-					<input id="txtPallet" placeholder="Todos" name="txtPallet" type="text" class="form-control"  onkeyUp="cargarListado();"  >
+					<input id="Usuario" placeholder="Todos" name="Usuario" type="text" class="form-control"  onkeyUp="cargarListado();"  >
 				</div> 
 			
 							
@@ -265,7 +265,7 @@ else
 						
 				<div class="col-md-6">
 					<label>Estado:</label>
-					<select class="form-control" id="cmbCuarto" name="cmbCuarto" onchange="cargarListado();">
+					<select class="form-control" id="cmbtarea" name="cmbtarea" onchange="cargarListado();">
 						<option value=0>Todos</option>
 						<?php
 						$res = $consult->verEstados();
@@ -338,13 +338,13 @@ else
 function cargarListado(){
 			$.ajax(
 {
-  url : 'petCajas.php',
+  url : 'taskstatus.php',
   type: "POST",
   data : {
 	  fechaI: document.getElementById("txtDesde").value,
 	  fechaF: document.getElementById("txtHasta").value,
-	  Pallet: document.getElementById("txtPallet").value,
-	  Cuarto: document.getElementById("cmbCuarto").value
+	  Pallet: document.getElementById("Usuario").value,
+	  Cuarto: document.getElementById("cmbtarea").value
 	  }
 })
   .done(function(data) {

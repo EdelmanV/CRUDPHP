@@ -38,10 +38,15 @@ class querys {
 			
 		$query = "Insert Into ttASKS  (Nombre,descripcion,IdUser) Values ('$nombre','$desc','$idUser')";
         $Result = $this->dbm->realizarConsulta ($query);
-		//echo $query;
-		//echo $Result;
+		
 		return $Result;
 	}
+function getTareas($user){
+	      $query = "Select * from tTasks Where nombre='$user' ";
+        $Result = $this->dbm->realizarConsulta ($query);
+	
+		return $Result;    
+    }
 	function wLogin($usuario,$pass)
 	{
 		
